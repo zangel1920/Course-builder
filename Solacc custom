@@ -1,0 +1,520 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoLAcc Course Builder</title>
+<style>
+:root {
+  --blue:#003D78;
+  --gold:#F7C948;
+  --light:#D9EEFF;
+  --ink:#17324D;
+}
+* {box-sizing:border-box}
+body {
+  font-family:Arial,sans-serif;
+  background:#f4f7fa;
+  color:var(--ink);
+  margin:0;
+}
+header {
+  background:var(--blue);
+  color:white;
+  padding:26px;
+}
+header h1 {margin:0 0 8px}
+main {max-width:1100px;margin:auto;padding:22px}
+.panel {
+  background:white;
+  padding:24px;
+  border:1px solid #d8e0e8;
+  border-radius:14px;
+  margin-bottom:18px;
+}
+button {
+  background:var(--blue);
+  color:white;
+  border:0;
+  padding:11px 16px;
+  border-radius:8px;
+  cursor:pointer;
+  margin:4px;
+}
+button:focus-visible,input:focus-visible,
+textarea:focus-visible {
+  outline:3px solid #1479c9;
+  outline-offset:2px;
+}
+.secondary {background:#e5edf5;color:var(--ink)}
+input,textarea {
+  width:100%;
+  padding:10px;
+  border:1px solid #aab9c8;
+  border-radius:7px;
+  margin:5px 0 12px;
+  font:inherit;
+}
+label {font-weight:bold}
+.hidden {display:none}
+.hero {
+  background:var(--blue);
+  color:white;
+  padding:35px;
+  border-radius:12px;
+  border-left:9px solid var(--gold);
+}
+.hero h2 {margin:10px 0}
+.grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:15px;
+}
+.tile {
+  border:1px solid #d8e0e8;
+  border-radius:10px;
+  padding:18px;
+}
+.tile:first-child {background:var(--light)}
+.module {
+  border:1px solid #d8e0e8;
+  padding:15px;
+  border-radius:10px;
+  margin:12px 0;
+}
+.note {
+  background:#fff6dd;
+  border-left:5px solid var(--gold);
+  padding:14px;
+  margin:15px 0;
+}
+.goldline {
+  background:var(--gold);
+  height:4px;
+  margin:20px 0;
+}
+small {color:#526779}
+</style>
+</head>
+<body>
+
+<header>
+<h1>SoLAcc Course Builder</h1>
+<p>Upload → Confirm → Generate → Preview → Export</p>
+</header>
+
+<main>
+
+<section class="panel">
+<h2>1. Course Information</h2>
+<p>Enter or edit the information below.</p>
+
+<label for="title">Course Title</label>
+<input id="title" value="College Success Skills">
+
+<label for="code">Course Code</label>
+<input id="code" value="COLS 1003">
+
+<label for="term">Term</label>
+<input id="term" value="Fall 2026">
+
+<label for="modality">Modality</label>
+<input id="modality" value="Online">
+
+<label for="description">Course Description</label>
+<textarea id="description" rows="4">Develop academic skills, personal awareness, career readiness, and strategies for college success.</textarea>
+
+<div class="note">
+This version uses editable course information. Automated
+syllabus extraction is not yet included in this build.
+</div>
+</section>
+
+<section class="panel">
+<h2>2. Instructional Modules</h2>
+<p>Edit the titles, prompts, and learning objectives.
+Use one objective per line.</p>
+<div id="moduleEditors"></div>
+<button onclick="addModule()">+ Add Module</button>
+<button onclick="generate()">Generate Course</button>
+</section>
+
+<section class="panel hidden" id="previewSection">
+<h2>3. Preview Your Course</h2>
+<p>The SoLAcc visual design is locked.
+Course content remains editable above.</p>
+
+<label for="pageSelect">Choose a page</label>
+<select id="pageSelect" onchange="previewPage()"
+style="padding:10px;width:100%;margin:10px 0"></select>
+
+<div id="preview"></div>
+
+<button onclick="exportCourse()">
+Download Canvas Cartridge (.imscc)
+</button>
+<p id="exportStatus" role="status"></p>
+</section>
+
+</main>
+
+<script>
+const initialModules = [
+ ["Purpose and Motivation",
+ "How does mindset affect my ability to succeed?",
+ "Explain academic and career purpose\nAnalyze motivation and mindset"],
+
+ ["Personal Awareness",
+ "Do I really know myself?",
+ "Identify personal values\nAssess strengths and skills"],
+
+ ["College Readiness",
+ "How can I prepare for college success?",
+ "Identify college expectations\nLocate campus resources"],
+
+ ["Effective Learning Strategies",
+ "How do I actually learn?",
+ "Apply effective learning strategies\nImprove memory and retention"],
+
+ ["Information and Study Skills",
+ "How can technology support learning?",
+ "Apply critical thinking\nPractice study and research skills"],
+
+ ["Career Exploration",
+ "How do I expand my future possibilities?",
+ "Explore career pathways\nAnalyze career information"],
+
+ ["Goal Setting and Planning",
+ "How do I choose my goals?",
+ "Set meaningful goals\nDevelop action plans"],
+
+ ["Communication and Leadership",
+ "How can I work effectively with others?",
+ "Apply communication strategies\nDevelop leadership skills"],
+
+ ["Career Readiness",
+ "How do I prepare for employment?",
+ "Develop career documents\nIdentify workplace expectations"],
+
+ ["Money, Health and Life Balance",
+ "How can I maintain balance?",
+ "Apply money-management strategies\nDevelop healthy habits"]
+];
+
+let modules=initialModules.map(m=>({
+ title:m[0],prompt:m[1],objectives:m[2]
+}));
+
+function el(id){return document.getElementById(id)}
+function escapeHTML(s){
+ return String(s??"").replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",
+ '"':"&quot;","'":"&#39;"
+ })[c]);
+}
+function xml(s){return escapeHTML(s)}
+function uid(){
+ return "g"+crypto.randomUUID().replaceAll("-","");
+}
+function slug(s){
+ return String(s).toLowerCase()
+ .replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+}
+
+function renderEditors(){
+ const box=el("moduleEditors");
+ box.innerHTML="";
+ modules.forEach((m,i)=>{
+  const d=document.createElement("div");
+  d.className="module";
+  d.innerHTML=`
+   <h3>Module ${i+1}</h3>
+   <label>Title</label>
+   <input class="mtitle" value="${escapeHTML(m.title)}">
+   <label>Essential Question</label>
+   <input class="mprompt" value="${escapeHTML(m.prompt)}">
+   <label>Learning Objectives</label>
+   <textarea class="mobjectives" rows="4">${escapeHTML(m.objectives)}</textarea>
+   <button class="secondary" type="button">Remove Module</button>`;
+  d.querySelector("button").onclick=()=>{
+   saveEditors();
+   modules.splice(i,1);
+   renderEditors();
+  };
+  box.appendChild(d);
+ });
+}
+function saveEditors(){
+ const cards=[...el("moduleEditors").children];
+ cards.forEach((d,i)=>{
+  modules[i].title=d.querySelector(".mtitle").value;
+  modules[i].prompt=d.querySelector(".mprompt").value;
+  modules[i].objectives=d.querySelector(".mobjectives").value;
+ });
+}
+function addModule(){
+ saveEditors();
+ modules.push({title:"New Module",prompt:"",objectives:""});
+ renderEditors();
+}
+function info(){
+ return {
+ title:el("title").value,
+ code:el("code").value,
+ term:el("term").value,
+ modality:el("modality").value,
+ description:el("description").value
+ };
+}
+function generate(){
+ saveEditors();
+ el("previewSection").classList.remove("hidden");
+ const s=el("pageSelect");
+ s.innerHTML="";
+ ["Home Page","Course Resources",
+ ...modules.map((m,i)=>`Module ${i+1}: ${m.title}`)]
+ .forEach((name,i)=>{
+  const o=document.createElement("option");
+  o.value=i;o.textContent=name;s.appendChild(o);
+ });
+ previewPage();
+ el("previewSection").scrollIntoView({behavior:"smooth"});
+}
+function objectivesHTML(m){
+ return "<ul>"+m.objectives.split("\n")
+ .filter(x=>x.trim())
+ .map(x=>"<li>"+escapeHTML(x)+"</li>").join("")+"</ul>";
+}
+function homeBody(){
+ const c=info();
+ return `<div class="hero">
+ <p>South Louisiana Community College</p>
+ <h2>${escapeHTML(c.title)}</h2>
+ <p>${escapeHTML(c.code)} | ${escapeHTML(c.term)}
+ | ${escapeHTML(c.modality)}</p>
+ </div>
+ <div class="goldline"></div>
+ <div class="grid">
+ <div class="tile"><h3>Start Here</h3>
+ <p>Begin with the institutional Getting Started module.</p></div>
+ <div class="tile"><h3>Syllabus</h3>
+ <p>Review course expectations and policies.</p></div>
+ <div class="tile"><h3>Modules</h3>
+ <p>Explore the instructional modules.</p></div>
+ <div class="tile"><h3>Support</h3>
+ <p>Access college support resources.</p></div>
+ </div>`;
+}
+function resourcesBody(){
+ const c=info();
+ return `<div class="hero"><h2>Course Resources</h2>
+ <p>Everything you need to succeed</p></div>
+ <h3>Course Information</h3>
+ <p>${escapeHTML(c.description)}</p>
+ <h3>Technology and Canvas</h3>
+ <p>Add institutional support information here.</p>
+ <h3>Textbook and Publisher Resources</h3>
+ <p>Add textbook access instructions here.</p>`;
+}
+function moduleBody(i){
+ const m=modules[i];
+ return `<div class="hero">
+ <p>MODULE ${String(i+1).padStart(2,"0")}</p>
+ <h2>${escapeHTML(m.title)}</h2>
+ <p>${escapeHTML(m.prompt)}</p></div>
+ <div class="goldline"></div>
+ <div class="grid">
+ <div class="tile"><h3>Learning Focus</h3>
+ ${objectivesHTML(m)}</div>
+ <div class="tile"><h3>This Module</h3>
+ <p>Review the learning materials.</p>
+ <p>Complete the activities.</p>
+ <p>Submit required assessments.</p></div>
+ </div>`;
+}
+function previewPage(){
+ const n=Number(el("pageSelect").value);
+ el("preview").innerHTML=n===0?homeBody():
+ n===1?resourcesBody():moduleBody(n-2);
+}
+
+/* ZIP writer for local Common Cartridge export */
+const encoder=new TextEncoder();
+const crcTable=Array.from({length:256},(_,n)=>{
+ let c=n;
+ for(let k=0;k<8;k++)
+  c=(c&1)?0xedb88320^(c>>>1):c>>>1;
+ return c>>>0;
+});
+function crc32(bytes){
+ let c=0xffffffff;
+ for(const b of bytes)
+  c=crcTable[(c^b)&255]^(c>>>8);
+ return (c^0xffffffff)>>>0;
+}
+function u16(n){return [n&255,(n>>>8)&255]}
+function u32(n){
+ return [n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+}
+function makeZip(files){
+ const parts=[],central=[];
+ let offset=0;
+ for(const f of files){
+  const name=encoder.encode(f.name);
+  const data=encoder.encode(f.data);
+  const crc=crc32(data);
+  const local=new Uint8Array([
+   80,75,3,4,...u16(20),...u16(0),...u16(0),
+   ...u16(0),...u16(0),...u32(crc),
+   ...u32(data.length),...u32(data.length),
+   ...u16(name.length),...u16(0),...name,...data
+  ]);
+  parts.push(local);
+  central.push(new Uint8Array([
+   80,75,1,2,...u16(20),...u16(20),
+   ...u16(0),...u16(0),...u16(0),...u16(0),
+   ...u32(crc),...u32(data.length),
+   ...u32(data.length),...u16(name.length),
+   ...u16(0),...u16(0),...u16(0),...u16(0),
+   ...u32(0),...u32(offset),...name
+  ]));
+  offset+=local.length;
+ }
+ const size=central.reduce((n,x)=>n+x.length,0);
+ return new Blob([...parts,...central,
+  new Uint8Array([
+   80,75,5,6,...u16(0),...u16(0),
+   ...u16(files.length),...u16(files.length),
+   ...u32(size),...u32(offset),...u16(0)
+  ])
+ ],{type:"application/zip"});
+}
+function exportCourse(){
+ saveEditors();
+ const c=info(),files=[],resources=[];
+ const homeId=uid(),resourceId=uid(),settingsId=uid();
+ const moduleRecords=[];
+
+ function addPage(id,title,path,body,front=false){
+  const head=`<meta charset="utf-8">
+  <meta name="identifier" content="${id}">
+  <meta name="editing_roles" content="teachers">
+  <meta name="workflow_state" content="active">
+  ${front?'<meta name="front_page" content="true">':""}`;
+  const page=`<!DOCTYPE html><html><head>
+  <title>${xml(title)}</title>${head}</head>
+  <body><div style="font-family:Arial,sans-serif">
+  ${body}</div></body></html>`;
+  files.push({name:path,data:page});
+  resources.push(`<resource identifier="${id}"
+   type="webcontent" href="${path}">
+   <file href="${path}"/></resource>`);
+ }
+
+ addPage(homeId,"Home","wiki_content/home.html",
+  homeBody(),true);
+ addPage(resourceId,"Course Resources",
+  "wiki_content/course-resources.html",resourcesBody());
+
+ modules.forEach((m,i)=>{
+  const pageId=uid(),moduleId=uid(),itemId=uid();
+  const path=`wiki_content/module-${i+1}-${slug(m.title)}.html`;
+  addPage(pageId,`Module ${i+1}: ${m.title}`,
+   path,moduleBody(i));
+  moduleRecords.push({pageId,moduleId,itemId,title:m.title});
+ });
+
+ const ns="http://canvas.instructure.com/xsd/cccv1p0";
+ const moduleMeta=`<?xml version="1.0" encoding="UTF-8"?>
+ <modules xmlns="${ns}">
+ ${moduleRecords.map((m,i)=>`
+ <module identifier="${m.moduleId}">
+ <title>Module ${i+1}: ${xml(m.title)}</title>
+ <workflow_state>unpublished</workflow_state>
+ <position>${i+1}</position>
+ <require_sequential_progress>false</require_sequential_progress>
+ <locked>false</locked>
+ <items>
+ <item identifier="${m.itemId}">
+ <content_type>WikiPage</content_type>
+ <workflow_state>active</workflow_state>
+ <title>Module ${i+1} Overview</title>
+ <identifierref>${m.pageId}</identifierref>
+ <position>1</position>
+ <new_tab>false</new_tab>
+ <indent>0</indent>
+ </item></items></module>`).join("")}
+ </modules>`;
+
+ const settingsFiles={
+ "module_meta.xml":moduleMeta,
+ "course_settings.xml":`<?xml version="1.0"?>
+ <course identifier="${uid()}" xmlns="${ns}">
+ <title>${xml(c.title)}</title>
+ <course_code>${xml(c.code)}</course_code>
+ <default_view>wiki</default_view></course>`,
+ "assignment_groups.xml":`<?xml version="1.0"?>
+ <assignmentGroups xmlns="${ns}"/>`,
+ "files_meta.xml":`<?xml version="1.0"?>
+ <fileMeta xmlns="${ns}"/>`,
+ "media_tracks.xml":`<?xml version="1.0"?>
+ <media_tracks xmlns="${ns}"/>`,
+ "external_viewers.xml":`<?xml version="1.0"?>
+ <external_viewers xmlns="${ns}"/>`,
+ "canvas_export.txt":"Canvas Course Export"
+ };
+ Object.entries(settingsFiles).forEach(([name,data])=>
+  files.push({name:"course_settings/"+name,data})
+ );
+
+ resources.unshift(`<resource identifier="${settingsId}"
+ type="associatedcontent/imscc_xmlv1p1/learning-application-resource"
+ href="course_settings/canvas_export.txt">
+ ${Object.keys(settingsFiles).map(name=>
+ `<file href="course_settings/${name}"/>`).join("")}
+ </resource>`);
+
+ const manifest=`<?xml version="1.0" encoding="UTF-8"?>
+ <manifest identifier="${uid()}"
+ xmlns="http://www.imsglobal.org/xsd/imsccv1p3/imscp_v1p1"
+ xmlns:lomimscc="http://ltsc.ieee.org/xsd/imsccv1p3/LOM/manifest">
+ <metadata>
+ <schema>IMS Common Cartridge</schema>
+ <schemaversion>1.3.0</schemaversion>
+ <lomimscc:lom><lomimscc:general>
+ <lomimscc:title><lomimscc:string>${xml(c.title)}
+ </lomimscc:string></lomimscc:title>
+ </lomimscc:general></lomimscc:lom>
+ </metadata>
+ <organizations>
+ <organization identifier="${uid()}" structure="rooted-hierarchy">
+ <item identifier="LearningModules">
+ ${moduleRecords.map((m,i)=>`
+ <item identifier="${m.moduleId}">
+ <title>Module ${i+1}: ${xml(m.title)}</title>
+ <item identifier="${m.itemId}" identifierref="${m.pageId}">
+ <title>Module ${i+1} Overview</title>
+ </item></item>`).join("")}
+ </item></organization>
+ </organizations>
+ <resources>${resources.join("")}</resources>
+ </manifest>`;
+
+ files.unshift({name:"imsmanifest.xml",data:manifest});
+ const blob=makeZip(files);
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;
+ a.download=slug(c.code+"-"+c.title)+".imscc";
+ document.body.appendChild(a);
+ a.click();
+ a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+ el("exportStatus").textContent=
+ "Cartridge downloaded. Import as Common Cartridge 1.x Package.";
+}
+renderEditors();
+</script>
+</body>
+</html>
